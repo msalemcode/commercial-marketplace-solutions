@@ -1,0 +1,70 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "storageAccountName": {
+            "type": "String"
+        },
+        "storageAccountType": {
+            "type": "String"
+        },
+        "location": {
+            "defaultValue": "[resourceGroup().location]",
+            "type": "String",
+            "metadata": {
+                "description": "Location for all resources."
+            }
+        },
+        "applicationResourceName": {
+            "defaultValue": "ama-example",
+            "type": "String"
+        },
+        
+        "managedIdentity": {
+            "defaultValue": {},
+            "type": "Object"
+        },
+     "resourceTags": {
+      "type": "object",
+      "defaultValue": {
+        "Environment": "Dev",
+        "Project": "AMA"
+      }
+    }
+    },
+    "variables": {
+        "managedResourceGroupId": "[concat(subscription().id,'/resourceGroups/',take(concat(resourceGroup().name,'-',uniquestring(resourceGroup().id),uniquestring(parameters('applicationResourceName'))),90))]"
+    },
+    "resources": [
+        {
+            "type": "Microsoft.Solutions/applications",
+            "apiVersion": "2017-09-01",
+            "tags": "[parameters('resourceTags')]",
+            "name": "[parameters('applicationResourceName')]",
+            "location": "[resourceGroup().Location]",
+            "kind": "MarketPlace",
+            "identity": "[if(empty(parameters('managedIdentity')),json('null'),parameters('managedIdentity'))]",
+            "plan": {
+                "name": "free",
+                "product": "msalemdummymanagedoffer-preview",
+                "publisher": "testtestindustryexperiencestest",
+                "version": "17.0.0"
+            },
+            "properties": {
+                "managedResourceGroupId": "[variables('managedResourceGroupId')]",
+                "parameters": {
+                    "storageAccountName": {
+                        "value": "[parameters('storageAccountName')]"
+                    },
+                    "storageAccountType": {
+                        "value": "[parameters('storageAccountType')]"
+                    },
+                    "location": {
+                        "value": "[parameters('location')]"
+                    }
+                },
+                "jitAccessPolicy": null
+            }
+        }
+    ]
+}
