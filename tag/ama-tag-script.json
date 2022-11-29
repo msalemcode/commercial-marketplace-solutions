@@ -1,0 +1,119 @@
+{
+    "$schema": "http://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "storageAccountPrefix": {
+            "type": "string",
+			"defaultValue":"msalem45p",
+            "metadata": {
+                "description": "Assign a prefix for the Storage account"
+            }
+        },
+        "storageAccountType": {
+            "type": "string",
+			"defaultValue": "Premium_LRS",
+            "metadata": {
+                "description": "Assign Storage account type"
+            }
+        },
+        "location": {
+            "type": "string",
+            "defaultValue": "eastus2",
+            "metadata": {
+                "description": "Location for the resources."
+            }
+        },
+        "applicationResourceRoleAssignment": {
+            "type": "string",
+            "defaultValue": "[newGuid()]"
+        }
+
+    },
+    "variables": {
+        "managedApplicationId": "[resourceGroup().managedBy]",
+        "managedApplicationName": "[last(split(variables('managedApplicationId'), '/'))]",
+        "applicationResourceGroupName": "[split(variables('managedApplicationId'), '/')[4]]",
+        "roleDefinitionOwner": "8e3af657-a8ff-443c-a75c-2fe8c4bcb635",
+        "storageName": "[concat(parameters('storageAccountPrefix'), uniqueString(resourceGroup().id))]",
+        "identityName": "[concat(parameters('storageAccountPrefix'),'-identity')]"
+    },
+    "resources": [
+    {
+      "type": "Microsoft.ManagedIdentity/userAssignedIdentities",
+      "apiVersion": "2022-01-31-PREVIEW",
+      "name": "[variables('identityName')]",
+      "location": "[parameters('location')]"
+    },
+
+        {
+            "type": "Microsoft.Storage/storageAccounts",
+            "name": "[variables('storageName')]",
+            "apiVersion": "2021-08-01",
+            "location": "[parameters('location')]",
+            "sku": {
+                "name": "[parameters('storageAccountType')]"
+            },
+            "kind": "Storage",
+            "properties": {
+                "allowBlobPublicAccess": true
+            }
+        },
+        {
+            "type": "Microsoft.Resources/deployments",
+            "apiVersion": "2021-04-01",
+            "name": "pid-GUID HERE -partnercenter",
+            "resourceGroup": "[variables('applicationResourceGroupName')]",
+            "properties": {
+                "mode": "Incremental",
+                "template": {
+                    "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
+                    "contentVersion": "1.0.0.0",
+                    "resources": [
+                        {
+                            "type": "Microsoft.Solutions/applications/providers/roleAssignments",
+                            "apiVersion": "2021-04-01-preview",
+                            "name": "[concat(variables('managedApplicationName'), '/Microsoft.Authorization/', parameters('applicationResourceRoleAssignment'))]",
+                            "properties": {
+                                "roleDefinitionId": "[concat(subscription().id, '/providers/Microsoft.Authorization/roleDefinitions/', variables('roleDefinitionOwner'))]",
+                                "principalId": "[reference(variables('identityName')).principalId]",
+                                "delegatedManagedIdentityResourceId": "[resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', variables('identityName'))]",
+                                "scope": "[variables('managedApplicationId')]",
+                                "principalType": "ServicePrincipal"
+                            }
+                        }
+                    ]
+                }
+            },
+            "dependsOn": [
+                "[variables('identityName')]"
+            ]
+        },
+     {
+      
+      "type": "Microsoft.Resources/deploymentScripts",
+      "apiVersion": "2020-10-01",
+      "name": "addtage",
+      "identity": {
+          "type": "userAssigned",
+          "userAssignedIdentities": {
+            "[resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', variables('identityName'))]": {}
+          }
+        },
+      "location": "[parameters('location')]",
+      "kind": "AzureCLI",
+      "dependsOn": [
+          "[variables('identityName')]"
+      ],
+      "properties": {
+        "azCliVersion": "2.32.0",
+        "scriptContent": "[concat('sleep 2100;az login --identity; az tag create --resource-id ', variables('managedApplicationId'), ' --tags Dept=IT Status=Normal; exit 0')]",        
+        "cleanupPreference": "OnSuccess",
+        "retentionInterval": "PT4H",
+        "timeout": "PT2H"
+      }
+    }
+    ],
+    "outputs": {
+    }
+}
+
