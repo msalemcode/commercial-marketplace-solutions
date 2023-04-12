@@ -1,0 +1,138 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "WebAppNamePrefix": {
+      "type": "string",
+      "metadata": {
+        "description": "Prefix used for creating web applications"
+      }
+    },
+  
+    "SqlAdminLoginPassword": {
+      "type": "string",
+      "defaultValue": "[newGuid()]"
+    }
+  
+  },
+  "variables": {
+    "location": "[resourceGroup().location]",
+    "sqlServerName": "[concat(parameters('webAppNamePrefix'),'-sql')]",
+    "sqlDBName": "TEST-DB",
+    "sqlAdminLogin": "[concat('saasdbadmin', substring(uniqueString(resourceGroup().id),0,6))]",
+    "sqlAdminLoginPassword": "[parameters('SqlAdminLoginPassword')]",
+    "sqlScriptPath": "[uri(deployment().properties.templateLink.uri, 'script.sql')]",
+    "$fxv#0": "cd /mnt/azscripts/azscriptinput\r\nls\r\nInstall-Module sqlserver -Force\r\nInvoke-Sqlcmd -InputFile /mnt/azscripts/azscriptinput/script.sql -ServerInstance ${Env:sqlserverName} -database ${Env:sqlDBName} -Username ${Env:sqlAdminLogin} -Password ${Env:sqlAdminLoginPassword}"
+    
+  },
+  "resources": [
+
+    {
+      "type": "Microsoft.Sql/servers",
+      "apiVersion": "2015-05-01-preview",
+      "name": "[variables('sqlServerName')]",
+      "location": "[resourceGroup().location]",
+      "dependsOn": [
+        "[resourceId('Microsoft.Network/virtualNetworks', variables('networkName'))]"
+      ],
+      "properties": {
+        "administratorLogin": "[variables('sqlAdminLogin')]",
+        "administratorLoginPassword": "[variables('sqlAdminLoginPassword')]",
+        "version": "12.0"
+      },
+      "resources": [
+        {
+          "type": "firewallrules",
+          "name": "AllowAllAzureIps",
+          "location": "[resourceGroup().location]",
+          "apiVersion": "2015-05-01-preview",
+          "dependsOn": [
+            "[variables('sqlServerName')]"
+          ],
+          "properties": {
+            "startIpAddress": "0.0.0.0",
+            "endIpAddress": "0.0.0.0"
+          }
+        }
+      ]
+    },
+
+    {
+      "comments": "Allowing Access from Web subnet to the SQL Server",
+      "type": "Microsoft.Sql/servers/virtualNetworkRules",
+      "name": "[concat(variables('sqlServerName'), '/internal')]",
+      "apiVersion": "2015-05-01-preview",
+      "scale": null,
+      "properties": {
+        
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Sql/servers', variables('sqlServerName'))]",
+        "[resourceId('Microsoft.Sql/servers/databases', variables('sqlServerName'), variables('sqlDBName'))]",
+        "createSqlSchema"
+      ]
+    },
+    {
+      "type": "Microsoft.Sql/servers/databases",
+      "apiVersion": "2017-03-01-preview",
+      "name": "[concat(string(variables('sqlServerName')), '/', string(variables('sqlDBName')))]",
+      "location": "[resourceGroup().location]",
+      "dependsOn": [
+        "[resourceId('Microsoft.Sql/servers', variables('sqlServerName'))]"
+      ],
+      "sku": {
+        "name": "S0",
+        "tier": "Standard"
+      },
+      "kind": "v12.0,user",
+      "properties": {
+        "collation": "SQL_Latin1_General_CP1_CI_AS",
+        "maxSizeBytes": 268435456000,
+        "catalogCollation": "SQL_Latin1_General_CP1_CI_AS",
+        "zoneRedundant": false
+      }
+    },
+    {
+      "type": "Microsoft.Resources/deploymentScripts",
+      "apiVersion": "2020-10-01",
+      "name": "createSqlSchema",
+      "location": "[resourceGroup().location]",
+      "dependsOn": [
+        "[resourceId('Microsoft.Sql/servers', variables('sqlServerName'))]",
+        "[resourceId('Microsoft.Sql/servers/databases', variables('sqlServerName'), variables('sqlDBName'))]"
+      ],
+      "kind": "AzurePowerShell",
+      "properties": {
+        "azPowerShellVersion": "8.0",
+        "scriptContent": "[variables('$fxv#0')]",
+        "timeout": "PT4H",
+        "cleanupPreference": "OnSuccess",
+        "retentionInterval": "P1D",
+        "supportingScriptUris": [
+          "[variables('sqlScriptPath')]"
+        ],
+        "environmentVariables": [
+          {
+            "name": "sqlserverName",
+            "value": "[concat(variables('sqlServerName'), '.database.windows.net')]"
+          },
+          {
+            "name": "sqlDBName",
+            "value": "[variables('sqlDBName')]"
+          },
+          {
+            "name": "sqlAdminLogin",
+            "value": "[variables('sqlAdminLogin')]"
+          },
+          {
+            "name": "sqlAdminLoginPassword",
+            "secureValue": "[variables('sqlAdminLoginPassword')]"
+          }
+        ]
+      }
+    }
+  ],
+  "outputs": {
+
+  }
+}
