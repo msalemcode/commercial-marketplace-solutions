@@ -1,0 +1,218 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "location": {
+      "type": "string",
+      "defaultValue": "[resourceGroup().location]",
+      "metadata": {
+        "description": "Location for all resources."
+      }
+    },
+    "aksName": {
+      "type": "string",
+      "metadata": {
+        "description": "AKS Cluster Name"
+      }
+    },
+    "nodeSize": {
+      "type": "string",
+      "defaultValue": "Standard_DS2_v2",
+      "metadata": {
+        "description": "Node Size"
+      }
+    },
+    "nodeCount": {
+      "type": "int",
+      "defaultValue": 1,
+      "metadata": {
+        "description": "Node Count"
+      }
+    },
+    "crossTenant": {
+      "type": "bool",
+      "defaultValue": true,
+      "metadata": {
+        "description": "Manually set flag whether to use delegatedManagedIdentityResourceId or not in role assignments"
+      }
+    },
+    "subnetName": {
+      "type": "string",
+      "metadata": {
+        "description": "New or Existing subnet Name"
+      }
+    },
+    "virtualNetworkName": {
+      "type": "string",
+      "metadata": {
+        "description": "New or Existing VNet Name"
+      }
+    },
+    "virtualNetworkNewOrExisting": {
+      "type": "string",
+      "metadata": {
+        "description": "Boolean indicating whether the VNet is new or existing"
+      }
+    },
+    "virtualNetworkResourceGroup": {
+      "type": "string",
+      "metadata": {
+        "description": "Resource group of the VNet"
+      }
+    },
+    "serviceCidr": {
+      "type": "string",
+      "metadata": {
+        "description": "service Cidr"
+      }
+    },
+    "dnsServiceIP": {
+      "type": "string",
+      "metadata": {
+        "description": "dns Service IP"
+      }
+    }
+    
+  },
+  "variables": {
+    "adminUsername": "[concat('azureuser')]",
+    "sshPublicKey": "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAACAQDR3ELgvUalTKRVAPNoYEDyecX9QH4rTgPwWFuQ+b33/BBZDTGVwJtAZwCqASaGvc7Bmb3d4q/1Cyd7MHGV1rBD/UJvf4TfyVzQDk0q0DqV2oovlUI2CL9EOIGqN2c0Z4g6GvaPnMMwKSKpc2m4UiJgXPQcH2lwb7PDxrpTJTgP8F3iVX8yvH+zxw5KgN4K3K1D9K17OICo6vcaP2HB/cKRxQoDTEEBQAsglzeoXGzkP4yMwwV2uG4GhuG1urR8ZGKSfDohi67h2pgYLiRjQQ9LTRHTemCqreBIuyEOSPJNwrsIoS5xNqkdzeMzTr+1pL126c8cRgG8ENe7Qvrbqx3cVXK1Ezec4yYk1pCiGxu5x4P9WYmWcvjp/p1HZ3tuZyGYRAUx0KTqkm/TQJxxzWBoUTF6b6MNwIM6qW5N9NM7Q6nEghSWjZXaN/FXTN5OxVV5ygKUz2W5S5q8W3ySBKIec2Ee6M9kdFGzU6Qv9mGYpKU7/Ys2jBxYftQxw/fh2UoXRN69wwP+j4reAAbSJnlfFu6T5wUtlNEJAR5vYm6ek45FXeVzpU4nhzJqjdnrhsF7FSeSV/HXx1tl043me3X/qbB2nKF96T6kZLrAbzQUmecExahBIGJCLMbexMcFuii4nPz1wP0X2pT8EI2rfC8oSoxnf9SNHEcNHm6gB4RA5w== masalem@DESKTOP-S24FNT7",
+    "logAnalyticsWorkspaceName": "[concat(parameters('aksName'),uniqueString(resourceGroup().id))]",
+    "identityName": "[concat(parameters('aksName'),'-identity')]",
+    "nodeResourceGroup": "[concat(resourceGroup().name,'-aks-rg')]",
+    "vnetId": {
+      "new": "[resourceId('Microsoft.Network/virtualNetworks',parameters('virtualNetworkName'))]",
+      "existing": "[resourceId(parameters('virtualNetworkResourceGroup'),'Microsoft.Network/virtualNetworks',parameters('virtualNetworkName'))]"
+    },
+    "subnetId": "[concat(variables('vnetId')[parameters('virtualNetworkNewOrExisting')],'/subnets/',parameters('subnetName'))]"
+
+  },
+  "resources": [
+    {
+      "comments": "*** Azure Marketplace required usage attribution tracking GUID ***",
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2023-07-01",
+      "name": "pid-9a22b4c5-1275-4156-b61d-335b84f417dc-partnercenter",
+      "properties": {
+        "mode": "Incremental",
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
+          "contentVersion": "1.0.0.0",
+          "resources": [
+          ]
+        }
+      }
+    },
+    {
+      "comments": "*** Identity that will be used by bootstraping VM and will be assigned Owner role to the Managed Resource Group ***",
+      "type": "Microsoft.ManagedIdentity/userAssignedIdentities",
+      "apiVersion": "2023-01-31",
+      "name": "[variables('identityName')]",
+      "location": "[parameters('location')]"
+    },
+   
+    {
+      "comments": "*** Log Analytics workspace for AKS monitoring ***",
+      "type": "Microsoft.OperationalInsights/workspaces",
+      "apiVersion": "2022-10-01",
+      "name": "[variables('logAnalyticsWorkspaceName')]",
+      "location": "[parameters('location')]",
+      "properties": {
+        "sku": {
+          "name": "pergb2018"
+        },
+        "retentionInDays": 730,
+        "workspaceCapping": {
+          "dailyQuotaGb": -1
+        }
+      }
+    },
+    {
+      "comments": "*** Logs Analytics ContainerInsights Solution for AKS ***",
+      "type": "Microsoft.OperationsManagement/solutions",
+      "apiVersion": "2015-11-01-preview",
+      "name": "[concat('ContainerInsights', '(', variables('logAnalyticsWorkspaceName'), ')')]",
+      "location": "[parameters('location')]",
+      "dependsOn": [
+        "[variables('logAnalyticsWorkspaceName')]"
+      ],
+      "plan": {
+        "name": "[concat('ContainerInsights', '(', variables('logAnalyticsWorkspaceName'), ')')]",
+        "product": "OMSGallery/ContainerInsights",
+        "promotionCode": "",
+        "publisher": "Microsoft"
+      },
+      "properties": {
+        "workspaceResourceId": "[resourceId('Microsoft.OperationalInsights/workspaces', variables('logAnalyticsWorkspaceName'))]"
+      }
+    },
+    {
+      "comments": "*** AKS cluster with custom-named nodeResourceGroup and system assigned managed identity ***",
+      "type": "Microsoft.ContainerService/managedClusters",
+      "apiVersion": "2023-10-01",
+      "location": "[parameters('location')]",
+      "name": "[parameters('aksName')]",
+      "dependsOn": [
+        "[variables('logAnalyticsWorkspaceName')]"
+      ],
+      "identity": {
+        "type": "SystemAssigned"
+      },
+      "properties": {
+        "nodeResourceGroup": "[variables('nodeResourceGroup')]",
+        "dnsPrefix": "[parameters('aksName')]",
+        "enableRBAC": true,
+        "agentPoolProfiles": [
+          {
+            "name": "agentpool",
+            "count": "[parameters('nodeCount')]",
+            "vmSize": "[parameters('nodeSize')]",
+            "osType": "Linux",
+            "storageProfile": "ManagedDisks",
+            "type": "VirtualMachineScaleSets",
+            "mode": "System",
+            "vnetSubnetID": "[variables('subnetId')]"
+          }
+        ],
+        "linuxProfile": {
+          "adminUsername": "[variables('adminUsername')]",
+          "ssh": {
+            "publicKeys": [
+              {
+                "keyData": "[variables('sshPublicKey')]"
+              }
+            ]
+          }
+        },
+        "networkProfile": {
+          "networkPlugin": "azure",
+          "loadBalancerSku": "standard",
+          "outboundType": "loadBalancer",
+          "serviceCidr": "[parameters('serviceCidr')]",
+          "dnsServiceIP": "[parameters('dnsServiceIP')]"
+        },
+        "apiServerAccessProfile": {
+          "enablePrivateCluster": false
+        },
+        "addonProfiles": {
+          "httpApplicationRouting": {
+            "enabled": false
+          },
+          "omsagent": {
+            "enabled": true,
+            "config": {
+              "logAnalyticsWorkspaceResourceID": "[resourceId('Microsoft.OperationalInsights/workspaces', variables('logAnalyticsWorkspaceName'))]"
+            }
+          }
+        }
+      }
+    }
+
+
+    
+
+  ],
+  "outputs": {
+
+  }
+}
