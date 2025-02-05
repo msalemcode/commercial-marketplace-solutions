@@ -65,7 +65,25 @@ To set up role assignment correctly, add the `delegatedManagedIdentityResourceId
 - Ensure `delegatedManagedIdentityResourceId` is properly set to reference the customer’s tenant identity.
 
 ### Role assignment PUT request with delegatedManagedIdentityResourceId is supported only in a cross tenant scenario.
-- `delegatedManagedIdentityResourceId` does not support same tenant deployment only in a cross tenant scenario.
-
+- `delegatedManagedIdentityResourceId` is only supported in cross-tenant scenarios and does not support deployments within the same tenant.
+For using with same tenant during testing please use parameter to include this property as follows:
+```json
+{
+      "comments": "Using cross-tenant delegatedManagedIdentityResourceId property",
+      "type": "Microsoft.Authorization/roleAssignments",
+      "apiVersion": "2021-04-01-preview",
+      "name": "[guid(resourceGroup().id, variables('<identityName>'), variables('<roleDefinitionId>'))]",
+      "dependsOn": [
+        "[variables('<identityName>')]"
+      ],
+      "properties": {
+        "roleDefinitionId": "[resourceId('Microsoft.Authorization/roleDefinitions',variables('<roleDefinitionId>'))]",
+        "principalId": "[reference(variables('<identityName>')).principalId]",
+        "principalType": "<PrincipalType>",
+        "scope": "[resourceGroup().id]",
+        "delegatedManagedIdentityResourceId": "[if(parameters('crossTenant'), resourceId('Microsoft.ManagedIdentity/userAssignedIdentities',variables('<identityName>')), json('null'))]"
+      }
+    }
+```
 ### Next steps
 [Azure Managed Application with managed identity](https://learn.microsoft.com/en-us/azure/azure-resource-manager/managed-applications/publish-managed-identity)
