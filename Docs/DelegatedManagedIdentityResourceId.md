@@ -64,5 +64,8 @@ To set up role assignment correctly, add the `delegatedManagedIdentityResourceId
 - AMA deployments with published managed apps and publisher access enabled occur in the publisher's tenant.
 - Ensure `delegatedManagedIdentityResourceId` is properly set to reference the customer’s tenant identity.
 
+### Role assignment PUT request with delegatedManagedIdentityResourceId is supported only in a cross tenant scenario.
+- `delegatedManagedIdentityResourceId` does not support same tenant deployment only in a cross tenant scenario.
+
 ### Next steps
 [Azure Managed Application with managed identity](https://learn.microsoft.com/en-us/azure/azure-resource-manager/managed-applications/publish-managed-identity)
