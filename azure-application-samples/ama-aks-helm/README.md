@@ -1,7 +1,7 @@
 
 
 
-# The Demo is no longer valid. Today to deploy helm chart, ISV MUST USE CONTAINER OFFER to deploy helm solution to AKS.  Please refer to [Managed Application with Container offer demo](../../container-offer-samples/container-azure-app-bundle/azure-app-with-one-cnab/)
+# This Demo is no longer valid. Today to deploy helm chart, ISV MUST USE CONTAINER OFFER to deploy helm solution to AKS.  Please refer to [Managed Application with Container offer demo](../../container-offer-samples/container-azure-app-bundle/azure-app-with-one-cnab/)
 
 
 
@@ -11,7 +11,7 @@ This repo demonstrates how to deploy AKS cluster and Microservices solution as A
 
 > **Warning**
 > 
-> Today, this demo will error out under Managed applicatin/publisher access mode.
+> Today, this demo will error out under Managed application/publisher access mode.
 >
 > This demo was built before releasing Container Offer feature. Please refer to [Container offer docs](https://learn.microsoft.com/en-us/partner-center/marketplace-offers/marketplace-containers)
 
