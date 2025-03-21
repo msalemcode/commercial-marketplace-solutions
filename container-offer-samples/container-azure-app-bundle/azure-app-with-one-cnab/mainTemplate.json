@@ -56,25 +56,16 @@
       "metadata": {
         "description": "Azure Vote Value 2"
       }
-    },
-    
-    "crossTenant": {
-      "type": "bool",
-      "defaultValue": true,
-      "metadata": {
-        "description": "Manually set flag whether to use delegatedManagedIdentityResourceId or not in role assignments"
-      }
-    }
+    }  
+
   },
   "variables": {
     "adminUsername": "[concat('azureuser')]",
+    "groupraname":"[concat('ra-',guid(resourceGroup().id))]",
     "sshPublicKey": "ENTER THE PUBLIC KEY HERE",
     "logAnalyticsWorkspaceName": "[concat(parameters('aksName'),uniqueString(resourceGroup().id))]",
     "identityName": "[concat(parameters('aksName'),'-identity')]",
     "nodeResourceGroup": "[concat(resourceGroup().name,'-aks-rg')]",
-    "roleDefinitionOwner": "8e3af657-a8ff-443c-a75c-2fe8c4bcb635",
-    "roleDefinitionManagedIdentityOperator": "f1a07417-d97a-45cb-824c-7a7467783830",
-    "roleDefinitionVirtualMachineContributor": "9980e02c-c2be-4d73-94e8-173b1dc7cf3c",
     "plan-name": "REPLACE-WITH-YOUR-PLAN-ID",
     "plan-publisher": "REPLACE-WITH-YOUR-PUBLISHER-ID",
     "plan-offerID": "REPLACE-WITH-YOUR-OFFER-ID",
@@ -85,7 +76,7 @@
         {
       "comments": "*** Azure Marketplace required usage attribution tracking GUID ***",
       "type": "Microsoft.Resources/deployments",
-      "apiVersion": "2021-04-01",
+      "apiVersion": "2023-07-01",
       "name": "pid-ENTER TRACKING GUID-partnercenter",
       "properties": {
         "mode": "Incremental",
@@ -100,30 +91,14 @@
     {
       "comments": "*** Identity that will be used by bootstraping VM and will be assigned Owner role to the Managed Resource Group ***",
       "type": "Microsoft.ManagedIdentity/userAssignedIdentities",
-      "apiVersion": "2018-11-30",
+      "apiVersion": "2023-01-31",
       "name": "[variables('identityName')]",
       "location": "[parameters('location')]"
     },
     {
-      "comments": "*** Assign Owner role to the Managed Resource Group using cross-tenant delegatedManagedIdentityResourceId property ***",
-      "type": "Microsoft.Authorization/roleAssignments",
-      "apiVersion": "2021-04-01-preview",
-      "name": "[guid(resourceGroup().id, variables('identityName'), variables('roleDefinitionOwner'))]",
-      "dependsOn": [
-        "[variables('identityName')]"
-      ],
-      "properties": {
-        "roleDefinitionId": "[resourceId('Microsoft.Authorization/roleDefinitions',variables('roleDefinitionOwner'))]",
-        "principalId": "[reference(variables('identityName')).principalId]",
-        "principalType": "ServicePrincipal",
-        "scope": "[resourceGroup().id]",
-        "delegatedManagedIdentityResourceId": "[if(parameters('crossTenant'), resourceId('Microsoft.ManagedIdentity/userAssignedIdentities',variables('identityName')), json('null'))]"
-      }
-    },
-    {
       "comments": "*** Log Analytics workspace for AKS monitoring ***",
       "type": "Microsoft.OperationalInsights/workspaces",
-      "apiVersion": "2021-06-01",
+      "apiVersion": "2022-10-01",
       "name": "[variables('logAnalyticsWorkspaceName')]",
       "location": "[parameters('location')]",
       "properties": {
@@ -158,7 +133,7 @@
     {
       "comments": "*** AKS cluster with custom-named nodeResourceGroup and system assigned managed identity ***",
       "type": "Microsoft.ContainerService/managedClusters",
-      "apiVersion": "2021-10-01",
+      "apiVersion": "2023-10-01",
       "location": "[parameters('location')]",
       "name": "[parameters('aksName')]",
       "dependsOn": [
@@ -213,134 +188,11 @@
       }
     },
     {
-      "comments": "*** After creating the AKS resource, wait via sleep for up to 20+ minutes to make sure that AMA RP role assignment is properly applied to the AKS Node Resource Group and not receive intermittent Forbidden error from ARM ***",
-      "type": "Microsoft.Resources/deploymentScripts",
-      "apiVersion": "2020-10-01",
-      "name": "sleep-after-aks",
-      "location": "[parameters('location')]",
-      "kind": "AzureCLI",
-      "dependsOn": [
-        "[parameters('aksName')]"
-      ],
-      "properties": {
-        "azCliVersion": "2.32.0",
-        "scriptContent": "sleep 1200",
-        "cleanupPreference": "OnSuccess",
-        "retentionInterval": "PT4H",
-        "timeout": "PT2H"
-      }
-    },
-    {
-      "comments": "*** After AKS cluster gets deployed plus a delay of 20+ minutes to make sure AMA RP gets proper permissions, use inner-scope nested template to get AKS managed identity resourceId and principalId ***",
-      "type": "Microsoft.Resources/deployments",
-      "apiVersion": "2021-04-01",
-      "name": "get-aks-mi",
-      "resourceGroup": "[variables('nodeResourceGroup')]",
-      "dependsOn": [
-        "[parameters('aksName')]",
-        "sleep-after-aks"
-      ],
-      "properties": {
-        "mode": "Incremental",
-        "expressionEvaluationOptions": {
-          "scope": "inner"
-        },
-        "parameters": {
-          "aksMiResourceId": {
-            "value": "[reference(parameters('aksName'),'2021-10-01','Full').properties.identityProfile.kubeletIdentity.resourceId]"
-          }
-        },
-        "template": {
-          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
-          "contentVersion": "1.0.0.0",
-          "parameters": {
-            "aksMiResourceId": {
-              "type": "string",
-              "defaultValue": ""
-            }
-          },
-          "variables": {},
-          "resources": [],
-          "outputs": {
-            "aksMiResourceId": {
-              "type": "string",
-              "value": "[parameters('aksMiResourceId')]"
-            },
-            "aksMiPrincipalId": {
-              "type": "string",
-              "value": "[reference(parameters('aksMiResourceId'),'2018-11-30','Full').properties.principalId]"
-            }
-          }
-        }
-      }
-    },
-    {
-      "comments": "*** Nested cross-resource-group role assignment to the AKS Node Resource Group ***",
-      "type": "Microsoft.Resources/deployments",
-      "apiVersion": "2021-04-01",
-      "name": "[concat('ra-',guid(resourceGroup().id))]",
-      "resourceGroup": "[variables('nodeResourceGroup')]",
-      "dependsOn": [
-        "[variables('identityName')]",
-        "[parameters('aksName')]",
-        "get-aks-mi"
-      ],
-      "properties": {
-        "mode": "Incremental",
-        "template": {
-          "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
-          "contentVersion": "1.0.0.0",
-          "resources": [
-            {
-              "comments": "*** Assign Owner role to the user assigned identity cross-tenant ***",
-              "type": "Microsoft.Authorization/roleAssignments",
-              "apiVersion": "2021-04-01-preview",
-              "name": "[guid(variables('nodeResourceGroup'), variables('identityName'), variables('roleDefinitionOwner'))]",
-              "properties": {
-                "roleDefinitionId": "[resourceId('Microsoft.Authorization/roleDefinitions',variables('roleDefinitionOwner'))]",
-                "principalId": "[reference(variables('identityName')).principalId]",
-                "principalType": "ServicePrincipal",
-                "scope": "[concat(subscription().id,'/resourceGroups/',variables('nodeResourceGroup'))]",
-                "delegatedManagedIdentityResourceId": "[if(parameters('crossTenant'), resourceId('Microsoft.ManagedIdentity/userAssignedIdentities',variables('identityName')), json('null'))]"
-              }
-            },
-            {
-              "comments": "*** Assign Managed Identity Operator role to AKS' managed identity cross-tenant (for Pod Identity) ***",
-              "type": "Microsoft.Authorization/roleAssignments",
-              "apiVersion": "2021-04-01-preview",
-              "name": "[guid(variables('nodeResourceGroup'), 'aksmi', variables('roleDefinitionManagedIdentityOperator'))]",
-              "properties": {
-                "roleDefinitionId": "[resourceId('Microsoft.Authorization/roleDefinitions',variables('roleDefinitionManagedIdentityOperator'))]",
-                "principalId": "[reference('get-aks-mi','2019-10-01').outputs.aksMiPrincipalId.value]",
-                "principalType": "ServicePrincipal",
-                "scope": "[concat(subscription().id,'/resourceGroups/',variables('nodeResourceGroup'))]",
-                "delegatedManagedIdentityResourceId": "[if(parameters('crossTenant'), reference('get-aks-mi','2019-10-01').outputs.aksMiResourceId.value, json('null'))]"
-              }
-            },
-            {
-              "comments": "*** Assign Virtual Machine Operator role to AKS' managed identity cross-tenant (for Pod Identity) ***",
-              "type": "Microsoft.Authorization/roleAssignments",
-              "apiVersion": "2021-04-01-preview",
-              "name": "[guid(variables('nodeResourceGroup'), 'aksvmo', variables('roleDefinitionVirtualMachineContributor'))]",
-              "properties": {
-                "roleDefinitionId": "[resourceId('Microsoft.Authorization/roleDefinitions',variables('roleDefinitionVirtualMachineContributor'))]",
-                "principalId": "[reference('get-aks-mi','2019-10-01').outputs.aksMiPrincipalId.value]",
-                "principalType": "ServicePrincipal",
-                "scope": "[concat(subscription().id,'/resourceGroups/',variables('nodeResourceGroup'))]",
-                "delegatedManagedIdentityResourceId": "[if(parameters('crossTenant'), reference('get-aks-mi','2019-10-01').outputs.aksMiResourceId.value, json('null'))]"
-              }
-            }
-          ]
-        }
-      }
-    },
-    {
-            "apiVersion": "2022-11-01",
+            "apiVersion": "2023-05-01",
             "dependsOn": [
                 "[variables('identityName')]",
                 "[parameters('aksName')]",
-                "get-aks-mi",
-                "[concat('ra-',guid(resourceGroup().id))]",
+                "[variables('groupraname')]",
                 "[resourceId('Microsoft.ContainerService/managedClusters/', parameters('aksName'))]"
             ],
             "name": "[parameters('extensionName')]",
@@ -351,7 +203,6 @@
             },
             "properties": {
                 "autoUpgradeMinorVersion": true,
-                "configurationProtectedSettings": {},
                 "configurationSettings": {
                     "title": "[parameters('extensionTitle')]",
                     "value1": "[parameters('extensionVoteValue1')]",
@@ -372,18 +223,6 @@
     "aksFqdn": {
       "type": "string",
       "value": "[reference(resourceId('Microsoft.ContainerService/managedClusters/', parameters('aksName'))).fqdn]"
-    },
-    "managedResourceGroup": {
-      "type": "string",
-      "value": "[resourceGroup().id]"
-    },
-    "userAssignedIdentity": {
-      "type": "string",
-      "value": "[resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', variables('identityName'))]"
-    },
-    "subscription": {
-      "type": "object",
-      "value": "[subscription()]"
     }
   }
 }

@@ -1,4 +1,10 @@
-# Azure Managed Application and AKS with Helm
+
+
+
+# The Demo is no longer valid. Today to deploy helm chart, ISV MUST USE CONTAINER OFFER to deploy helm solution to AKS.  Please refer to [Managed Application with Container offer demo](../../container-offer-samples/container-azure-app-bundle/azure-app-with-one-cnab/)
+
+
+# Azure Managed Application and AKS with Helm (ARCHIVED)
 
 This repo demonstrates how to deploy AKS cluster and Microservices solution as Azure Managed Application. The demo will provision AKS cluster and deploy Azure To-DO app using Helm Chart.
 
